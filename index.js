@@ -24,7 +24,19 @@ app.get("/db/getUsers", async (req, res) => {
     data: users,
     meta: { page: currentPage },
   });
-});
+})
+
+app.get('/db/top5', async (req, res) => {
+  const { id } = req.query 
+
+  const resp = await prisma.song.findMany({
+    where: {userId : parseInt(id)},
+    orderBy: {count : 'desc'},
+    take: 5,
+  })
+
+  res.json(resp)
+})
  
 app.post('/db/addUser', async(req, res) => {
   const userName = req.query.userName
@@ -33,26 +45,76 @@ app.post('/db/addUser', async(req, res) => {
   }
   console.log(userName)
   try {
-    const user = await prisma.spotify.findFirst({
+    let user = await prisma.user.findFirst({
       where: { name: userName },
     });
       
       if(!user) {
-        await prisma.spotify.create({
+        await prisma.user.create({
           data : {
           name: userName,
           }
         })
         console.log("Created user");
-        return res.json('Worked');
+        user = await prisma.user.findFirst({ where: { name: userName }});
+
+        return res.json(user);
       }
       else{
-        return res.json('already exist')
+        let user = await prisma.user.findFirst({
+      where: { name: userName },
+      });
+        return res.json(user)
       }
     }catch (e) {
     console.error(e);
     return res.status(500).json({ message: "something went wrong" });
   }
+})
+
+app.post('/db/addSong', async (req, res) => {
+  const songName = req.query.songName
+  const id = req.query.id
+
+  if(!songName || !id) {
+    return res.status(400).json({ message: "songName or id is missing" })
+  }
+
+  console.log('trying to add song')
+  try{
+    let entry = await prisma.song.findFirst({
+        where: { name: songName, userId: parseInt(id) },
+      });
+      
+      if (!entry) {
+        await prisma.song.create({
+          data: {name: songName, userId:parseInt(id), count: 1}
+        })
+
+        console.log('Created Song for user') 
+        entry = await prisma.song.findFirst({
+          where: { name: songName, userId: parseInt(id) },
+        });
+        return res.json(entry)
+      } else {
+        console.log('entry exist')
+        
+        entry = await prisma.song.update({
+          where: { name: songName, userId: parseInt(id) },
+          data: {count : entry.count + 1}
+        });
+        return res.json(entry)
+      }
+
+      
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "something went wrong" });
+  }
+
+
+
+  
 })
 
 app.listen(port, () => {
